@@ -1,0 +1,66 @@
+______________________________________________________________________
+
+Cell coalescent simulation - CellCoal  version 1.3.1
+(c) 2016-2022 David Posada - dposada@uvigo.es
+______________________________________________________________________
+
+Thu Jun  5 22:45:31 2025
+Command line arguments (some might not affect) =  /home/haz19024/softwares/cellcoal/bin/cellcoal-1.2.0 -n5 -s50 -l100 -e1000 -b1 -j100 -p0 -D0.2 -B0 0.01 -C5 -E0.05 -d0 -otest_no_cn_d0.5_err0.05 -y3 -v -1 -2 -6 -7 -9 -Y
+
+Run settings
+------------
+[Parameter file = parameters]
+
+[Assumptions in brackets]
+
+General
+ Seed                                         =   1749177931
+ Number replicate data sets                   =   5  
+ Number of cells                              =   50 
+ Number of genomic sites                      =   100
+
+Demographics
+ Effective population size                    =   1000
+
+Genealogy
+ Mean time to the MRCA (Ne generations)       =   2.1164
+ Exp time to the MRCA [constant Ne]           =   1.9600
+ Variance time MRCA                           =   0.2898
+ Exp variance time MRCA [constant Ne]         =   1.1595
+ No rate variation among branches
+
+User-defined branches
+ Transforming branch length ratio             =   5.0e-01
+ Healthy tip branch length ratio              =   1.0e+00
+
+Mutation models
+ Character alphabet                           =   DNA
+ All sites evolving under the ISM diploid
+
+SNV rates
+ Fixed number of mutations                    =   100
+ Mean number of mutation events               =   100.00
+ Mean number of SNVs                          =   100.00
+ Variance number of SNVs                      =   0.00
+ Proportion of reps without SNV sites         =   0.00
+
+Single-cell WGA
+ Alellic dropout fixed                        =   2.0e-01
+ Maternal allelic imbalance                   =   0.5
+ Amplification error                          =   0.0
+ Doublet rate per cell                        =   0.0
+
+NGS
+ Sequencing coverage (Poisson)                =   5.00X
+ Haploid coverage reduction                   =   0.50
+ Sequencing error                             =   5.0e-02
+
+
+Output files are in folder "test_no_cn_d0.5_err0.05":
+ Tree printed to file "trees" in folder "trees_dir"
+ Times printed to file "times" in folder "times_dir"
+ SNV genotypes printed to file "snv_gen" in folder "snv_genotypes_dir"
+ SNV haplotypes printed to file "snv_hap" in folder "snv_haplotypes_dir"
+ True haplotypes printed to file "true_hap" in folder "true_haplotypes_dir"
+ Genotype likelihoods (GATK_ADO model) printed to file "vcf" in folder "vcf_dir"
+ Read counts printed in PILEUP format to file "pileup" in folder "pileup_dir"

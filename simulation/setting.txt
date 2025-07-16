@@ -1,0 +1,67 @@
+Replicate #  1/5 Replicate #  2/5 Replicate #  3/5 Replicate #  4/5 Replicate #  5/5 
+
+** Simulations finished at Fri May 16 21:41:45 2025
+
+
+Run settings
+------------
+[Parameter file = parameters]
+
+General
+ Seed                                         =   1747446105
+ Number replicate data sets                   =   5  
+ Number of cells                              =   10 
+ Number of genomic sites                      =   100
+
+Demographics
+ Effective population size                    =   1000
+
+Genealogy
+ Mean time to the MRCA (Ne generations)       =   1.8436
+ Variance time MRCA                           =   0.4264
+ No rate variation among branches
+
+User-defined branches
+ Transforming branch length ratio             =   5.0e-01
+ Healthy tip branch length ratio              =   1.0e+00
+
+Mutation models
+ Character alphabet                           =   DNA
+ All sites evolving under the ISM diploid
+
+SNV rates
+ Fixed number of mutations                    =   30 
+ Mean number of mutation events               =   30.00
+ Mean number of SNVs                          =   26.80
+ Variance number of SNVs                      =   5.20
+ Proportion of reps without SNV sites         =   0.00
+
+Deletion rates
+ Deletion rate                                =   1.0e-05
+ Mean number of deletion events               =   21.80
+ Variance number of deletion events           =   42.70
+
+Single-cell WGA
+ Alellic dropout                              =   0.0
+ Maternal allelic imbalance                   =   0.5
+ Amplification error                          =   0.0
+ Doublet rate per cell                        =   0.0
+
+NGS
+ Sequencing coverage (Poisson)                =   10.00X
+ Haploid coverage reduction                   =   0.50
+ Sequencing error                             =   0.0e+00
+
+
+Output files are in folder "test5":
+ Tree printed to file "trees" in folder "trees_dir"
+ Times printed to file "times" in folder "times_dir"
+ SNV genotypes printed to file "snv_gen" in folder "snv_genotypes_dir"
+ SNV haplotypes printed to file "snv_hap" in folder "snv_haplotypes_dir"
+ True haplotypes printed to file "true_hap" in folder "true_haplotypes_dir"
+ Genotype likelihoods (GATK model) printed to file "vcf" in folder "vcf_dir"
+ Read counts printed in PILEUP format to file "pileup" in folder "pileup_dir"
+
+_________________________________________________________________
+Time processing: 0.011597 seconds
+
