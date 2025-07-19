@@ -18,8 +18,8 @@ from popgen.utils.metric import tree_accuracy
 # ----------------------------- non-class version ------------------------------
 
 CN_MAX = 2
-CN_MIN = 2
-LAMBDA_C = 0
+CN_MIN = 0
+LAMBDA_C = 1
 LAMBDA_S = 0.1
 LAMBDA_T = 1
 N = int((CN_MAX-CN_MIN+1) * (CN_MAX+CN_MIN+2) / 2)
@@ -743,8 +743,8 @@ if __name__ == "__main__":
     ### cellcoal simulation test
 
     # dirname = 'simulation/test_no_cn_d0.5_err0.05'
-    dirname = 'simulation/test8'
-    i = 1
+    dirname = 'simulation/test'
+    i = 5
 
     reads, tree, tg = get_scistreec_input_with_cn(dirname, i)
     n_site, n_cell, _ = reads.shape
@@ -754,11 +754,12 @@ if __name__ == "__main__":
     nwk = tree.output()
 
     # reads = cp.asarray(reads, dtype=int)
-    random_tree = popgen.utils.get_random_binary_tree(100, start_index=0)
+    # random_tree = popgen.utils.get_random_binary_tree(100, start_index=0)
     tree = s.get_true_tree(nwk)
 
     ## test gpu init
     probs = init_prob_leaves_gpu(reads)
+    # print('pp', probs)
     # np.savetxt('reads.txt', reads[:, :, -1].astype(int), fmt='%i')
     ##  write probs.txt
     visual_probs = []

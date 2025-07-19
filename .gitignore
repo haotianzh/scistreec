@@ -1,0 +1,12 @@
+# tmp out files
+*.out
+*.tmp
+*.npy
+*.txt
+
+
+# cache files and data files
+__pycache__/
+simulation/
+scistree2_outputs/
+cpu_version/

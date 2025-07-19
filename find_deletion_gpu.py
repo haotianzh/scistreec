@@ -7,7 +7,7 @@ dirname = 'simulation/test1'
 i = 1
 
 def load_tree(dirname, i):
-    tree_file = f'{dirname}/trees_dir/trees.{i:04}'
+    tree_file = f'{dirname}/results/trees_dir/trees.{i:04}'
     with open(tree_file) as f:
         nwk = f.readline().strip()
         tree = popgen.utils.from_newick(nwk)
@@ -15,7 +15,7 @@ def load_tree(dirname, i):
     return tree
 
 def load_true_genotype(dirname, i):
-    true_hap_file = f'{dirname}/true_haplotypes_dir/true_hap.{i:04}'
+    true_hap_file = f'{dirname}/trees_dir/true_haplotypes_dir/true_hap.{i:04}'
     haps = []
     cell_names = []
     with open(true_hap_file) as f:
@@ -124,7 +124,7 @@ def read_vcf(vcf):
 
 
 def get_scistreec_input_with_cn(dirname, i):
-    vcf = f'{dirname}/vcf_dir/vcf.{i:04}'
+    vcf = f'{dirname}/results/vcf_dir/vcf.{i:04}'
     data, tg = read_vcf(vcf)
     tree = load_tree(dirname, i)
     return data, tree, tg

@@ -348,7 +348,7 @@ f'''##fileformat=VCFv4.3
 
 
 def convert_single_file(dir, prefix):
-    file = f'{dir}/vcf_dir/vcf.{prefix:04d}'
+    file = f'{dir}/results/vcf_dir/vcf.{prefix:04d}'
     print(file)
     fvcf = 0
     fprob = 0

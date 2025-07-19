@@ -198,6 +198,7 @@ extern "C" __global__ void log_matmul(float* mat1, float* mat2, float* out, int 
         out[i * k + j] = logf(0.0f); 
         for (int p=0; p<k; p++){
             float m = max(out[i*k+j], mat1[i*k+p] + mat2[j*k+p]);
+            if (!__isinf(m))
             out[i*k+j] = m + logf(expf(out[i*k+j] - m) + expf(mat1[i*k+p] + mat2[j*k+p] - m));
         }   
     }
@@ -209,35 +210,37 @@ def compute_genotype_log_probs():
     return cp.RawKernel(kernel_log_probability, 'compute_genotype_log_probs')
 
 
-def log_matmal():
+def log_matmul_cuda():
     return cp.RawKernel(kernel_log_matmul, 'log_matmul')
-
-
 
 
 if __name__ == "__main__":
     cp.random.seed(42)
 
-    a = cp.abs(cp.random.rand(32, 3))
+    a = cp.abs(cp.random.rand(50, 10))
     # a = cp.array([[cp.e, cp.e, cp.e]], dtype=cp.float32)
-    b = cp.abs(cp.random.rand(3, 3))
-    b = cp.array([[1e-3, 1e-3, 1-2e-3], [1e-3, 1e-3, 1-2e-3], [1e-3, 1e-3, 1-2e-3]], dtype=cp.float32)
+    b = cp.abs(cp.eye(10))
+    # b = cp.array([[1e-3, 1e-3, 1-2e-3], [1e-3, 1e-3, 1-2e-3], [1e-3, 1e-3, 1-2e-3]], dtype=cp.float32)
     # b = cp.array([])
 
     a = cp.asarray(a, dtype=cp.float32) 
     a = a / cp.sum(a, axis=-1, keepdims=True)
     
     b = cp.asarray(b, dtype=cp.float32)
+    # print(b)
     b = b / cp.sum(b, axis=-1)
+    
 
     loga = cp.log(a)
     logb = cp.log(b)
-    k = 100
+
+    k = 1
     # ------------ test cuda -------------
     
     for i in range(k):
-        c = cp.zeros([32, 3], dtype=cp.float32)
-        log_matmal()((2, 1), (16, 3), (loga, logb, c, 32, 3))
+        c = cp.zeros([50, 10], dtype=cp.float32)
+        # print(loga)
+        log_matmul_cuda()((2, 1), (32, 32), (loga, logb, c, 50, 10))
         loga = c
         
 
@@ -249,3 +252,4 @@ if __name__ == "__main__":
 
     print(c)
     print(cp.log(a))
+    print(cp.isclose(c, cp.log(a)))

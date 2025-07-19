@@ -36,16 +36,12 @@ def topological_sort(tree, order='up'):
                     if_add = True
                     if order == 'up':
                         for child in next_node.children:
-                            print('--', next_node.children.values())
-                            print('**', next_node.identifier, child, recorded, str(child) in recorded)
-                            if str(child) not in recorded:
+                            if child not in recorded:
                                 if_add = False
                                 break                          
                     if if_add: 
                         next_layer.append(next_node)
                         recorded.add(next_node.identifier)
-                    print(node.identifier, next_node.identifier, if_add)
-        print(next_layer)
         layer = next_layer
     return layers
 
@@ -55,8 +51,10 @@ def topological_sort(tree, order='up'):
 if __name__ == "__main__":
     tree = popgen.utils.get_random_binary_tree(5)
     tree2 = popgen.utils.get_random_binary_tree(5)
+    tree3 = popgen.utils.get_random_binary_tree(5)
     tree.draw()
     tree2.draw()
+    tree3.draw()
     # sorted = topological_sort(tree, order='up')  
-    sorted = batch_topological_sort([tree, tree2])
+    sorted = batch_topological_sort([tree, tree2, tree3], order='down')
     print([[n.name for n in li] for li in sorted])

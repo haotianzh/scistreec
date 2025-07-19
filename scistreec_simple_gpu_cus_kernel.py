@@ -1,9 +1,9 @@
 import os
 import popgen
 import popgen.utils
+import popgen.utils
 from transition_solver import TransitionProbability
 from utils_gpu import *
-from find_deletion_gpu import *
 import numpy as np
 import cupy as cp 
 from scipy.stats import binom
@@ -14,14 +14,15 @@ from time import time
 from kernels import *
 # os.environ['OPENBLAS_NUM_THREADS'] = '1'
 from popgen.utils.metric import tree_accuracy
+from tqdm import tqdm
 
 # ----------------------------- non-class version ------------------------------
 
 CN_MAX = 2
-CN_MIN = 0
-LAMBDA_C = 0.1
+CN_MIN = 2
+LAMBDA_C = 0
 LAMBDA_S = 0.1
-LAMBDA_T = 1
+LAMBDA_T = 10
 N = int((CN_MAX-CN_MIN+1) * (CN_MAX+CN_MIN+2) / 2)
 
 
@@ -149,8 +150,8 @@ class ScisTreeC():
                                             LAMBDA_S=self.LAMBDA_S,
                                             LAMBDA_T=self.LAMBDA_T)
 
-        self.tran_prob_mutation_free = cp.log(cp.asarray(transition.solve_no_mutation(verbose=False)))
-        self.tran_prob_mutation = cp.log(cp.asarray(transition.solve_mutation(verbose=False)))
+        self.tran_prob_mutation_free = cp.log(cp.asarray(transition.solve_no_mutation(verbose=False), dtype=cp.float32))
+        self.tran_prob_mutation = cp.log(cp.asarray(transition.solve_mutation(verbose=False), dtype=cp.float32))
         self.traversor = popgen.utils.TraversalGenerator()
         if verbose:
             print('with mutation')
@@ -283,29 +284,35 @@ class ScisTreeC():
         """
             Bottom-up 
         """
-        nsite = probs.shape[1]
-        tran_prob_mut_free_broadcast = cp.tile(self.tran_prob_mutation_free, (nsite, 1)).reshape(nsite, self.N, self.N)
-        tran_prob_mut_broadcast = cp.tile(self.tran_prob_mutation, (nsite, 1)).reshape(nsite, self.N, self.N)
+        h, w = probs.shape[1:]
+        # print('h', h, 'w', w)
+        block_size = (32, 32)
+        grid_size = ((h + block_size[0] - 1) // block_size[0], (w + block_size[1] - 1) // block_size[1])
         for node in self.traversor(tree):
             if node.is_leaf():
                 node.U = probs[int(node.name)]
-                node.U_ = log_mat_vec_mul(tran_prob_mut_free_broadcast, node.U.reshape(nsite, 1, self.N))
-                node._U = log_mat_vec_mul(tran_prob_mut_broadcast, node.U.reshape(nsite, 1, self.N))
+                node.U_ = cp.zeros([h, w], dtype=cp.float32)
+                node._U = cp.zeros([h, w], dtype=cp.float32)
+                log_matmul_cuda()(grid_size, block_size, (node.U, self.tran_prob_mutation_free, node.U_, h, w))
+                log_matmul_cuda()(grid_size, block_size, (node.U, self.tran_prob_mutation, node._U, h, w))
+                # print(self.tran_prob_mutation)
                 continue
             components = []
             for child in node.get_children():
                 components.append(child.U_)
             components = cp.array(components)
             node.U = cp.sum(components, axis=0)
-            node.U_ = log_mat_vec_mul(tran_prob_mut_free_broadcast, node.U.reshape(nsite, 1, self.N))
-            node._U = log_mat_vec_mul(tran_prob_mut_broadcast, node.U.reshape(nsite, 1, self.N))
+            node.U_ = cp.zeros([h, w], dtype=cp.float32)
+            node._U = cp.zeros([h, w], dtype=cp.float32)
+            log_matmul_cuda()(grid_size, block_size, (node.U, self.tran_prob_mutation_free, node.U_, h, w))
+            log_matmul_cuda()(grid_size, block_size, (node.U, self.tran_prob_mutation, node._U, h, w))
 
     @cpu_time
     def calculate_Q(self, tree):
         """
             calcuate Q for each site recursively, have to do after calculation of U, use this fashion instead of DFS
         """
-        # assert 'U' in tree.root.__dict__, "fatal: calculate U first!"
+        assert 'U' in tree.root.__dict__, "fatal: calculate U first!"
         nsite = tree.root.U.shape[0]
         tran_prob_mut_free_broadcast = cp.tile(self.tran_prob_mutation_free, (nsite, 1)).reshape(nsite, self.N, self.N)
         for node in self.traversor(tree, order='pre'):
@@ -346,6 +353,7 @@ class ScisTreeC():
             likelihoods.append(likelihood[:, self.index_gt(2, 0)])
             branches.append(node.identifier)
         likelihoods = cp.array(likelihoods)
+        print(likelihood)
         max_L = likelihoods.max(axis=0).sum()
         # print(likelihoods.argmax(axis=0))
         # print(tree.root.U.max(axis=1).sum())
@@ -518,7 +526,8 @@ class ScisTreeC():
         # local search:
         best_tree = tree.copy()
         best_likelihood = self.marginal_evaluate_dp(probs, best_tree)
-        for t in candidates:
+        for t in tqdm(candidates):
+            # print('spr', popgen.utils.spr_distance(tree, t))
             likelihood = self.marginal_evaluate_dp(probs, t.copy())
             if likelihood > best_likelihood:
                 best_likelihood = likelihood
@@ -526,8 +535,8 @@ class ScisTreeC():
         return best_tree, best_likelihood
     
 
-    def local_search(self, probs, ground_truth=None):
-        tree = self.initial_tree(probs)
+    def local_search(self, probs, tree, ground_truth=None):
+        # tree = self.initial_tree(probs)
         L = -np.inf
         while True:
             better_tree, likelihood = self.nni_search_non_optim_sinlge_round(probs, tree)
@@ -548,157 +557,84 @@ if __name__ == "__main__":
     np.set_printoptions(suppress=True)
     s = ScisTreeC(verbose=True)
 
+    dirname = 'simulation/test_no_cn'
+    dirname = '/data/haotian/scistree/data_in_popgen/data/sdd/haotian/scistree_test_2/data/ncell_100_nsite_500_dropout_0.2_coverage_10_doublet_0_seqerror_0.01'
+    i = 1
 
-    ### cellcoal simulation test
 
-    # dirname = 'simulation/test_no_cn_d0.5_err0.05'
-    dirname = 'simulation/test8'
-    i = 5
+    # -------- ScisTreeC inputs -----------------
+    # reads, tree, tg = get_scistreec_input_with_cn(dirname, i)
+    # print(tg)
+    # n_site, n_cell, _ = reads.shape
+    # print('#site', n_site, '#cell', n_cell)
+    # rename_dict = {f'cell{i+1:04}': str(i+1) for i in range(n_cell)}
+    # tree = popgen.utils.relabel(tree, name_map=rename_dict)
+    # nwk = tree.output()
+    # tree = s.get_true_tree(nwk)
+    # probs = init_prob_leaves_gpu(reads)
 
-    reads, tree, tg = get_scistreec_input_with_cn(dirname, i)
-    n_site, n_cell, _ = reads.shape
-    print('#site', n_site, '#cell', n_cell)
-    rename_dict = {f'cell{i+1:04}': str(i+1) for i in range(n_cell)}
-    tree = popgen.utils.relabel(tree, name_map=rename_dict)
-    nwk = tree.output()
 
-    # reads = cp.asarray(reads, dtype=int)
-    random_tree = popgen.utils.get_random_binary_tree(100, start_index=0)
-    tree = s.get_true_tree(nwk)
+    ## convert to scistree2: (nsite, ncell) -> (ncell, nsite, k), when k=3, 02=0.0f, 11, 20(wild)
+    scistree2_in = read_scistree2_input(f'{dirname}/{i}.prob')
+    tree = load_tree(dirname, i)
+    tree = popgen.utils.relabel(tree, offset=-1)
+    print(tree.root.is_root())
 
-    ## test gpu init
-    probs = init_prob_leaves_gpu(reads)
-    # np.savetxt('reads.txt', reads[:, :, -1].astype(int), fmt='%i')
-    ##  write probs.txt
+    probs = cp.zeros([scistree2_in.shape[1], scistree2_in.shape[0], N])
+    for z in range(scistree2_in.shape[0]):
+        for x in range(scistree2_in.shape[1]):
+            probs[x, z, 0] = -cp.inf
+            probs[x, z, 1] = cp.log(1-scistree2_in[z, x])
+            probs[x, z, 2] = cp.log(scistree2_in[z, x])
+
     visual_probs = []
-
-
-    # np.savetxt('probs.txt', probs.get()[:, 57, :], fmt='%4f')
     nj_tree = s.initial_tree(probs)
-    # print(probs1[0,0])
-    # print(probs.shape)
-
-
-    # probs = init_prob_leaves(reads)
-    # np.save('probs1.npy', probs)
-    # # print(probs.shape)
-    # probs = cp.asarray(probs)
-
-    # print(cp.isclose(probs, probs1))
-
-
-    # spr move
-    # tree = popgen.utils.spr_move(tree, 1)
-    # tree = popgen.utils.get_random_binary_tree(100, start_index=0)
-    # # s.maximal_path_decoding(reads, nwk, site_index=626)
-    # # print(nwk)
-
-    # tree = nj_tree
-
-    # ------------------------------------------
-
     print('true tree', s.marginal_evaluate_dp(probs, tree), tree_accuracy(tree, tree))
     print('nj tree', s.marginal_evaluate_dp(probs, nj_tree), tree_accuracy(tree, nj_tree))
-    # print('random tree', s.marginal_evaluate_dp(probs, random_tree), tree_accuracy(tree, random_tree))
-
-    # --------------------------------------------
-    # likelihood = s.marginal_evaluate_dp(probs, tree)
 
     
-    # likelihood_nj_tree = s.marginal_evaluate_dp(probs, nj_tree)
-    # likelihood_true_tree = s.marginal_evaluate_dp(probs, tree)
-    # acc_nj_tree = tree_accuracy(tree, nj_tree)
-    # print('*** true', likelihood_true_tree)
-    # print('*** nj', likelihood_nj_tree, acc_nj_tree,)
-
-    # neighbor_true_tree = popgen.utils.spr_move(tree, 2)
-    # likelihood_neigh = s.marginal_evaluate_dp(probs, neighbor_true_tree)
-    # acc_neigh = tree_accuracy(tree, neighbor_true_tree)
-    # print('*** true neighbor', likelihood_neigh, acc_neigh)
-
-
-
-
-    # # ----------------- ScisTree 2 same input-------------------
-    # np.set_printoptions(precision=10)
-    # # scistree2_in = read_scistree2_input(f'{dirname}/{i}.prob')
-    # # print(scistree2_in)
-    # # print(scistree2_in)
-    # scistree2 = popgen.utils.ScisTree2()
-    # sc_in = cp.exp(probs).get()[:, :, -1].T.astype(float)
-    # sc_in[sc_in > 1-1e-10] = 1-1e-10
-    # sc_in[sc_in < 1e-10] = 1e-10
-    # res = scistree2.infer(sc_in)
-    # scistree2_tree = popgen.utils.from_newick(res[1])
-    # scistree2_tree = popgen.utils.relabel(scistree2_tree, offset=-1)
-    # acc_scistree2_tree = tree_accuracy(tree, scistree2_tree)
-    # likelihood_scistree2 = s.marginal_evaluate_dp(probs, scistree2_tree)
-    # print('*** scistree2 same', likelihood_scistree2, acc_scistree2_tree)
-
-
-    # ----------------- ScisTree 2 same input nni-------------------
-    # scistree2 = popgen.utils.ScisTree2(nni=True)
-    # sc_in = cp.exp(probs).get()[:, :, -1].T.astype(float)
-    # sc_in[sc_in > 1-1e-10] = 1-1e-10
-    # sc_in[sc_in < 1e-10] = 1e-10
-    # # print(sc_in >= 1)
-    # res = scistree2.infer(sc_in)
-    # scistree2_tree = popgen.utils.from_newick(res[1])
-    # scistree2_tree = popgen.utils.relabel(scistree2_tree, offset=-1)
-    # print('00', scistree2_tree)
-    # acc_scistree2_tree = tree_accuracy(tree, scistree2_tree)
-    # likelihood_scistree2 = s.marginal_evaluate_dp(probs, scistree2_tree)
-    # print('*** scistree2 same nni', likelihood_scistree2, acc_scistree2_tree)
-
-
-    # ----------------- ScisTree 2 same input evaluate-------------------
-    np.save('reads.npy', reads)
-    print(nwk)
-    scistree2 = popgen.utils.ScisTree2()
-    sc_in = cp.exp(probs).get()[:, :, -1].T
-    # sc_in[sc_in > 1-1e-10] = 1-1e-10
-    # sc_in[sc_in < 1e-10] = 1e-10
-    print((sc_in < 0.5).astype(int))
-    imputed_geno, like = scistree2.evaluate(sc_in, nwk)
-    print(like)
-
-
 
     # ----------------- ScisTree 2 -------------------
     scistree2_in = read_scistree2_input(f'{dirname}/{i}.prob')
     scistree2 = popgen.utils.ScisTree2()
     res = scistree2.infer(scistree2_in)
+    scistree2_like = scistree2.evaluate(scistree2_in, res[1])
     scistree2_tree = popgen.utils.from_newick(res[1])
     scistree2_tree = popgen.utils.relabel(scistree2_tree, offset=-1)
     acc_scistree2_tree = tree_accuracy(tree, scistree2_tree)
     likelihood_scistree2 = s.marginal_evaluate_dp(probs, scistree2_tree)
-    print('*** scistree2', likelihood_scistree2, acc_scistree2_tree)
+    print(tree.output())
+    true_likelihood = scistree2.evaluate(scistree2_in, tree.output())
+    print('*** scistree2', res[2], scistree2_like[1], true_likelihood, likelihood_scistree2, acc_scistree2_tree)
 
 
     # ----------------- ScisTree 2 NNI-------------------
     scistree2_in = read_scistree2_input(f'{dirname}/{i}.prob')
     scistree2 = popgen.utils.ScisTree2(nni=True)
     res = scistree2.infer(scistree2_in)
+    scistree2_like = scistree2.evaluate(scistree2_in, res[1])
     scistree2_tree = popgen.utils.from_newick(res[1])
     scistree2_tree = popgen.utils.relabel(scistree2_tree, offset=-1)
     acc_scistree2_tree = tree_accuracy(tree, scistree2_tree)
     likelihood_scistree2 = s.marginal_evaluate_dp(probs, scistree2_tree)
-    print('*** scistree2 nni', likelihood_scistree2, acc_scistree2_tree)
+    print('*** scistree2 nni', res[2], scistree2_like[1], likelihood_scistree2, acc_scistree2_tree)
 
 
     # ----------------- ScisTree 2 NJ -------------------
     scistree2_in = read_scistree2_input(f'{dirname}/{i}.prob')
     scistree2 = popgen.utils.ScisTree2(nj=True)
     res = scistree2.infer(scistree2_in)
-    # print(res)
+    scistree2_like = scistree2.evaluate(scistree2_in, res[0])
     scistree2_tree = popgen.utils.from_newick(res[0])
     scistree2_tree = popgen.utils.relabel(scistree2_tree, offset=-1)
+
+    print('diff', popgen.utils.spr_distance(scistree2_tree, nj_tree))
     acc_scistree2_tree = tree_accuracy(tree, scistree2_tree)
     likelihood_scistree2 = s.marginal_evaluate_dp(probs, scistree2_tree)
-    print('*** scistree2 nj', likelihood_scistree2, acc_scistree2_tree)
+    print('*** scistree2 nj', res[1], scistree2_like[1], likelihood_scistree2, acc_scistree2_tree)
 
 
 
 
-    mytree, myL = s.local_search(probs, ground_truth=tree)
-    print('scistreec', myL, tree_accuracy(tree, mytree))
+    # mytree, myL = s.local_search(probs, scistree2_tree, ground_truth=tree)
+    # print('scistreec', myL, tree_accuracy(tree, mytree))
